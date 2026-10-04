@@ -1,5 +1,7 @@
-from typing import Literal
+from dotenv import load_dotenv
+load_dotenv()
 
+from typing import Literal
 from fastapi import FastAPI, HTTPException, Depends
 from pydantic import BaseModel
 from jose import JWTError, jwt
@@ -7,8 +9,6 @@ from jose import JWTError, jwt
 from database import SessionLocal
 from models import User
 from models import NotificationRequest as NotificationDB
-from dotenv import load_dotenv
-load_dotenv()
 from auth import (
     hash_password,
     verify_password,
