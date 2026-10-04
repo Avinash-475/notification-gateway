@@ -26,9 +26,6 @@ def dummy_task(x, y):
 
 @celery_app.task(
     bind=True,
-    autoretry_for=(Exception,),
-    retry_backoff=True,
-    retry_backoff_max=60,
     max_retries=3
 )
 @celery_app.task(bind=True, max_retries=3)
