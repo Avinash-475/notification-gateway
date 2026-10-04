@@ -6,6 +6,11 @@ from fastapi import FastAPI, HTTPException, Depends
 from pydantic import BaseModel
 from jose import JWTError, jwt
 
+from database import SessionLocal, engine
+from models import Base
+
+Base.metadata.create_all(bind=engine)
+
 from database import SessionLocal
 from models import User
 from models import NotificationRequest as NotificationDB
