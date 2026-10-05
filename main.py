@@ -5,13 +5,13 @@ from typing import Literal
 from fastapi import FastAPI, HTTPException, Depends
 from pydantic import BaseModel
 from jose import JWTError, jwt
+from sqlalchemy.orm import Session
 
-from database import SessionLocal, engine
+from database import engine, get_db
 from models import Base
 
 Base.metadata.create_all(bind=engine)
 
-from database import SessionLocal
 from models import User
 from models import NotificationRequest as NotificationDB
 from auth import (
@@ -50,12 +50,9 @@ class SignupRequest(BaseModel):
 
 
 @app.post("/signup")
-def signup(request: SignupRequest):
-    db = SessionLocal()
-
+def signup(request: SignupRequest, db: Session = Depends(get_db)):
     existing_user = db.query(User).filter(User.email == request.email).first()
     if existing_user:
-        db.close()
         raise HTTPException(status_code=400, detail="Email already registered")
 
     new_user = User(
@@ -65,7 +62,6 @@ def signup(request: SignupRequest):
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
-    db.close()
 
     return {"id": new_user.id, "email": new_user.email}
 
@@ -76,11 +72,8 @@ class LoginRequest(BaseModel):
 
 
 @app.post("/login")
-def login(request: LoginRequest):
-    db = SessionLocal()
-
+def login(request: LoginRequest, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == request.email).first()
-    db.close()
 
     if not user:
         raise HTTPException(status_code=401, detail="Invalid email or password")
@@ -130,13 +123,15 @@ class NotificationRequest(BaseModel):
 @app.post("/notify")
 def notify(
     request: NotificationRequest,
-    current_user_email: str = Depends(get_current_user_email)
+    current_user_email: str = Depends(get_current_user_email),
+    db: Session = Depends(get_db)
 ):
-    db = SessionLocal()
     current_user = db.query(User).filter(User.email == current_user_email).first()
 
+    if not current_user:
+        raise HTTPException(status_code=404, detail="User not found")
+
     if is_rate_limited(current_user.id):
-        db.close()
         raise HTTPException(status_code=429, detail="Too many requests. Please try again later.")
 
     new_notification = NotificationDB(
@@ -152,8 +147,6 @@ def notify(
 
     send_notification_task.delay(new_notification.id)
 
-    db.close()
-
     return {
         "id": new_notification.id,
         "status": new_notification.status
@@ -161,12 +154,13 @@ def notify(
 
 
 @app.get("/status/{request_id}")
-def status(request_id: int, current_user_email: str = Depends(get_current_user_email)):
-    db = SessionLocal()
-
+def status(
+    request_id: int,
+    current_user_email: str = Depends(get_current_user_email),
+    db: Session = Depends(get_db)
+):
     current_user = db.query(User).filter(User.email == current_user_email).first()
     notification = db.query(NotificationDB).filter(NotificationDB.id == request_id).first()
-    db.close()
 
     if not notification:
         raise HTTPException(status_code=404, detail="Notification not found")
